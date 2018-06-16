@@ -1,0 +1,6 @@
+16/6/18
+
+1. add tests
+2. sort out that bug!
+3. add some examples
+4. ready the module for CPAN

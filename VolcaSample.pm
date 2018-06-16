@@ -19,6 +19,10 @@ use Fcntl qw(O_CREAT O_WRONLY);
 use Config;
 use File::Basename;
 
+# the following 3 hashes correspond to the various #define's in
+# the volcasample_pattern.h file which is part of the Korg Syro
+# SDK library available online at github
+
 my %bit_num_for = (
     motion   => 0x01,
     loop     => 0x02,
@@ -57,6 +61,7 @@ my %motion_param_index_for = (
     hi_cut       => 13,
 );
 
+# error checking functions used by the VolcaSample object
 
 sub _check_num_args {
     my $expected = shift;
@@ -119,6 +124,9 @@ sub _check_param_val {
     croak $err if $err;
 }
 
+# the following 2 functions check that parameter and motion parameter
+# values are within the allowed ranges. The allowed ranges were
+# obtained from the documentation file in the Korg Syro SDK library 
 
 sub _check_motion_param_val {
     my ($param, $vals) = @_;
@@ -166,8 +174,6 @@ sub _get_rand_param_val {
 }
 
 
-
-
 sub _get_rand_motion_val {
     my ($param) = @_;
     
@@ -180,6 +186,9 @@ sub _get_rand_motion_val {
     return $v;
 }
 
+# the following 2 functions return hashes which correspond to the
+# VolcaSample_Part_Data and VolcaSample_Pattern_Data structs defined
+# in the volcasample_pattern.h file
 
 sub _init_part_href {
     my $p = {
@@ -387,6 +396,77 @@ sub set_motion_params {
 }
 
 
+sub get_pattern {
+    return shift->{pattern_num} + 1;
+}
+
+
+sub get_part {
+    return shift->{part_num} + 1;
+}
+
+
+sub get_sample {
+    my $p = shift->_get_part_href();
+    
+    return $p->{samp_num};
+}
+
+
+sub step_is_on {
+    _check_num_args(2, @_);
+    my ($self, $step_num) = @_;
+    _check_val_bounds('step number', $step_num, 1, 16);
+    
+    my $p = $self->_get_part_href();
+    
+    return $p->{step_on} & 2 ** ($step_num - 1) ? 1 : 0; 
+}
+
+
+sub func_is_on {
+    _check_num_args(2, @_);
+    my ($self, $func) = @_;
+    _check_func_names($func);
+    
+    my $p  = $self->_get_part_href();
+    my $bn = $bit_num_for{$func};
+    
+    return $p->{funcs} & $bn ? 1 : 0;
+}
+
+
+sub get_param_val {
+    _check_num_args(2, @_);
+    my ($self, $param) = @_;
+    _check_param_name($param);
+    
+    my $p = $self->_get_part_href();
+    my $i = $param_index_for{$param};
+    
+    return $p->{params}[$i];
+}
+
+
+sub get_motion_param_val {
+    _check_num_args(3, @_);
+    my ($self, $step_num, $param) = @_;
+    _check_val_bounds('step number', $step_num, 1, 16);
+    _check_param_name($param);
+    
+    my $p = $self->_get_part_href();
+    my $i = $motion_param_index_for{$param};
+    
+    if ($param eq 'level' || $param eq 'speed' || $param eq 'pan') {
+        return $p->{motion}[($i*16) + $step_num - 1],
+               $p->{motion}[(($i+1) * 16) + $step_num - 1];
+    }
+    else {
+        return $p->{motion}[($i*16) + $step_num - 1];
+    }
+}
+
+
 sub _make_part_binary_blob {
     my ($self, $part) = @_;
     
@@ -467,7 +547,7 @@ sub make_syro {
     my $exe;
     if ($^O eq 'linux') {
         if ($Config{longsize} == 4) {
-            $exe = "syro_volcasample_linux.1686";
+            $exe = "syro_volcasample_linux.i686";
         }
         elsif ($Config{longsize} == 8) {
             $exe = "syro_volcasample_linux.x86_64";
@@ -698,6 +778,38 @@ following:
 2. Make sure no other sounds are playing whilst data is being transferred.
 3. Make sure the firmware on the Volca Sample is version 1.2 or higher.
    Consult the manufacturers instructions on how to do this.
+   
+=head2 get_pattern()
+
+Returns the currently selected pattern.
+
+=head2 get_part()
+
+Returns the currently selected part.
+
+=head2 get_sample()
+
+Returns the sample number for the currently selected pattern and part.
+
+=head2 step_is_on($step_num)
+
+Determines whether the given step ($step_num) is on. Returns true if it
+is on or false if it is off.
+
+=head2 func_is_on($func_name)
+
+Determines whether the given function ($func_name) is on. Returns true if
+it is or false if it is off.
+
+=head2 get_param_val($param)
+
+Returns the value of the given parameter ($param).
+
+=head2 get_motion_param_val($step, $param)
+
+Returns the value(s) of the given motion parameter ($param) for the given
+step ($step). Motion parameters 'level', 'speed' and 'pan' return two
+values the start and end values. All other parameters return one value.
 
 =head1 AUTHOR
 
